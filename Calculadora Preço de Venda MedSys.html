@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Calculadora de Precificação – Notas & Resumos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#1e1e1e; --card:#2a2a2a; --muted:#333; --border:#444; --text:#f0f0f0; --accent:#0aa2ff; --accent-hover:#0686d1;
+    }
+    *{box-sizing:border-box}
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    h1,h2{margin: 8px 0 14px}
+    .row {display:flex; gap:16px; flex-wrap:wrap}
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 18px;
+      width: 100%;
+    }
+    table { width: 100%; border-collapse: collapse; background: var(--card); }
+    th, td { border: 1px solid var(--border); padding: 8px; text-align: center; }
+    th { background: var(--muted); }
+    input, select, textarea {
+      background: var(--muted);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+    }
+    input[type="number"]{ text-align:right; width:120px}
+    input[type="text"]{ width: 220px}
+    input[type="date"]{ width: 160px}
+    textarea{width:100%; min-height:70px}
+    .btn {
+      padding: 10px 14px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .btn:hover{ background: var(--accent-hover); }
+    .btn.secondary{ background:#555}
+    .btn.danger{ background:#b33}
+    .toolbar{ display:flex; gap:10px; flex-wrap:wrap}
+    .grid-3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px}
+    .muted{ color:#cfd3da; font-size:12px}
+    .pill { display:inline-block; padding:3px 8px; border:1px solid var(--border); border-radius:999px; margin-right:6px; }
+    .section-title{ font-size:18px; margin-bottom:8px}
+    .scroll {max-height: 280px; overflow:auto}
+  </style>
+</head>
+<body>
+  <h1>📊 Calculadora de Precificação – Notas & Resumos</h1>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>🛒 Loja<br><input type="text" id="loja" placeholder="Ex: Mercado Livre, Pichau, Kabum"></label>
+      </div>
+      <div>
+        <label>📅 Data da Nota<br><input type="date" id="dataNota"></label>
+      </div>
+      <div>
+        <label>📝 Observações (opcional)<br><input type="text" id="obs" placeholder="Ex: Pedido #123, NF 456"></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Produtos da Nota</div>
+    <table id="tabela-produtos">
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th>Quantidade</th>
+          <th>Preço Unitário (R$)</th>
+          <th>Total (R$)</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><input type="text" placeholder="Descrição"></td>
+          <td><input type="number" value="1" min="1" class="qtd"></td>
+          <td><input type="number" value="0" step="0.01" class="unitario"></td>
+          <td class="subtotal">0,00</td>
+          <td><button class="btn secondary" onclick="removerLinha(this)">🗑</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="toolbar" style="margin-top:10px">
+      <button class="btn" onclick="adicionarProduto()">+ Adicionar Produto</button>
+      <span class="muted">Dica: use TAB para navegar entre os campos e ENTER para confirmar.</span>
+    </div>
+  </div>
+
+  <div class="card grid-3">
+    <div><label>Desconto da Nota (R$)<br><input type="number" id="desconto" value="0" step="0.01"></label></div>
+    <div><label>Frete (R$)<br><input type="number" id="frete" value="0" step="0.01"></label></div>
+    <div><label>Impostos (R$)<br><input type="number" id="impostos" value="0" step="0.01"></label></div>
+    <div><label>Margem de Lucro (%)<br><input type="number" id="lucro" value="30" step="0.1"></label></div>
+    <div style="grid-column: span 2">
+      <p>✅ <b>Subtotal Produtos:</b> <span id="subtotalSpan">R$ 0,00</span></p>
+      <p>💰 <b>Custo Final da Nota:</b> <span id="custoFinalSpan">R$ 0,00</span></p>
+      <p>📈 <b>Potencial de Venda (total da nota):</b> <span id="potencialVendaSpan">R$ 0,00</span></p>
+      <p>📊 <b>Markup efetivo:</b> <span id="markupSpan">0%</span> &nbsp; | &nbsp; <b>Margem bruta (potencial):</b> <span id="margemBrutaSpan">0%</span></p>
+    </div>
+  </div>
+
+  <div class="card toolbar">
+    <button class="btn" onclick="calcular()">Calcular</button>
+    <button class="btn" onclick="salvarNota()">💾 Salvar Nota</button>
+    <button class="btn" onclick="exportarExcelNota()">📥 Exportar Excel (esta nota)</button>
+    <button class="btn secondary" onclick="exportarBackup()">💾 Exportar Dados (.json)</button>
+    <input type="file" id="importFile" style="display:none" accept=".json" onchange="importarBackup(event)">
+    <button class="btn secondary" onclick="document.getElementById('importFile').click()">📂 Importar Dados (.json)</button>
+    <button class="btn danger" onclick="limparProdutos()">Limpar Produtos</button>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Resultado por Produto (Rateio + Venda)</div>
+    <div id="resultado" class="scroll"></div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Notas Salvas (Local)</div>
+    <div class="muted">Os dados ficam salvos no seu navegador (localStorage). Você pode exportar o resumo completo ou fazer backup/restore.</div>
+    <div id="notasContainer" class="scroll"></div>
+    <div class="toolbar" style="margin-top:10px">
+      <button class="btn" onclick="exportarExcelResumo()">📦 Exportar Excel (resumo)</button>
+      <button class="btn secondary" onclick="atualizarListaNotas()">↻ Atualizar</button>
+      <button class="btn danger" onclick="apagarTudo()">🧹 Apagar todas as notas</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Resumo por Período</div>
+    <div class="row">
+      <div><label>Período<br>
+        <select id="periodoSelect" onchange="renderResumoPeriodo()">
+          <option value="hoje">Hoje</option>
+          <option value="semana">Esta semana</option>
+          <option value="mes" selected>Este mês</option>
+          <option value="personalizado">Personalizado</option>
+        </select></label>
+      </div>
+      <div><label>De<br><input type="date" id="deData" onchange="renderResumoPeriodo()" disabled></label></div>
+      <div><label>Até<br><input type="date" id="ateData" onchange="renderResumoPeriodo()" disabled></label></div>
+    </div>
+    <div id="resumoPeriodo" style="margin-top:12px"></div>
+  </div>
+
+  <!-- SheetJS para exportações -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+/* Utilidades */
+const $$ = sel => document.querySelector(sel);
+const BRL = v => "R$ " + (Number(v||0).toFixed(2)).replace('.',',');
+const STORAGE_KEY = "notasPrecificacaoV1";
+
+function hojeISO(){
+  const d = new Date(); const m = String(d.getMonth()+1).padStart(2,'0'); const day = String(d.getDate()).padStart(2,'0');
+  return d.getFullYear()+"-"+m+"-"+day;
+}
+window.addEventListener('DOMContentLoaded', ()=> { 
+  $$('#dataNota').value = hojeISO(); 
+  atualizarListaNotas(); 
+  renderResumoPeriodo(); 
+});
+
+/* Tabela Produtos */
+function adicionarProduto() {
+  let tabela = document.querySelector("#tabela-produtos tbody");
+  let linha = document.createElement("tr");
+  linha.innerHTML = `
+    <td><input type="text" placeholder="Descrição"></td>
+    <td><input type="number" value="1" min="1" class="qtd"></td>
+    <td><input type="number" value="0" step="0.01" class="unitario"></td>
+    <td class="subtotal">0,00</td>
+    <td><button class="btn secondary" onclick="removerLinha(this)">🗑</button></td>
+  `;
+  tabela.appendChild(linha);
+}
+function removerLinha(btn) { btn.parentElement.parentElement.remove(); }
+
+function limparProdutos(){
+  document.querySelector("#tabela-produtos tbody").innerHTML = `
+    <tr>
+      <td><input type="text" placeholder="Descrição"></td>
+      <td><input type="number" value="1" min="1" class="qtd"></td>
+      <td><input type="number" value="0" step="0.01" class="unitario"></td>
+      <td class="subtotal">0,00</td>
+      <td><button class="btn secondary" onclick="removerLinha(this)">🗑</button></td>
+    </tr>`;
+  $$('#resultado').innerHTML = '';
+  $$('#subtotalSpan').innerText = BRL(0);
+  $$('#custoFinalSpan').innerText = BRL(0);
+  $$('#potencialVendaSpan').innerText = BRL(0);
+  $$('#markupSpan').innerText = '0%';
+  $$('#margemBrutaSpan').innerText = '0%';
+}
+
+/* Cálculo */
+function calcular() {
+  let linhas = document.querySelectorAll("#tabela-produtos tbody tr");
+  let subtotal = 0;
+  let produtos = [];
+
+  linhas.forEach(linha => {
+    let produto = linha.querySelector("input[type=text]").value || "Produto";
+    let qtd = parseFloat(linha.querySelector(".qtd").value) || 0;
+    let unitario = parseFloat(linha.querySelector(".unitario").value) || 0;
+    let total = qtd * unitario;
+    linha.querySelector(".subtotal").textContent = total.toFixed(2).replace('.', ',');
+    subtotal += total;
+    produtos.push({produto, qtd, unitario, total});
+  });
+
+  let desconto = parseFloat($$('#desconto').value) || 0;
+  let frete = parseFloat($$('#frete').value) || 0;
+  let impostos = parseFloat($$('#impostos').value) || 0;
+  let lucro = parseFloat($$('#lucro').value) || 0;
+
+  let custoFinal = subtotal - desconto + frete + impostos;
+
+  // Resultado por produto: rateio proporcional do custo final e aplicação da margem
+  let html = `<table><thead>
+    <tr><th>Produto</th><th>Qtd</th><th>Total Nota (R$)</th><th>Rateio Unit (R$)</th><th>Venda Unit (R$)</th><th>Venda Total (R$)</th></tr>
+  </thead><tbody>`;
+
+  let potencialTotalVenda = 0;
+  produtos.forEach(p => {
+    let proporcao = subtotal > 0 ? (p.total / subtotal) : 0;
+    let custoRateadoUnit = (p.qtd>0) ? ((custoFinal * proporcao) / p.qtd) : 0;
+    let vendaUnit = custoRateadoUnit * (1 + lucro/100);
+    let vendaTotal = vendaUnit * p.qtd;
+    potencialTotalVenda += vendaTotal;
+
+    html += `<tr>
+      <td style="text-align:left">${p.produto}</td>
+      <td>${p.qtd}</td>
+      <td>${BRL(p.total)}</td>
+      <td>${BRL(custoRateadoUnit)}</td>
+      <td>${BRL(vendaUnit)}</td>
+      <td>${BRL(vendaTotal)}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+
+  $$('#resultado').innerHTML = html;
+  $$('#subtotalSpan').innerText = BRL(subtotal);
+  $$('#custoFinalSpan').innerText = BRL(custoFinal);
+  $$('#potencialVendaSpan').innerText = BRL(potencialTotalVenda);
+
+  // métricas globais
+  let markupEfetivo = custoFinal>0 ? (potencialTotalVenda/custoFinal - 1)*100 : 0;
+  let margemBruta = potencialTotalVenda>0 ? ((potencialTotalVenda - custoFinal)/potencialTotalVenda)*100 : 0;
+  $$('#markupSpan').innerText = markupEfetivo.toFixed(2) + "%";
+  $$('#margemBrutaSpan').innerText = margemBruta.toFixed(2) + "%";
+
+  return {produtos, subtotal, desconto, frete, impostos, lucro, custoFinal, potencialTotalVenda};
+}
+
+/* Exportar Excel da Nota Atual */
+function exportarExcelNota() {
+  const calc = calcular();
+  let dados = [["Produto","Quantidade","Total Nota (R$)","Rateio Unit (R$)","Venda Unit (R$)","Venda Total (R$)"]];
+  const subtotal = calc.subtotal, custoFinal = calc.custoFinal, lucro = calc.lucro;
+
+  calc.produtos.forEach(p=>{
+    const proporcao = subtotal>0 ? p.total/subtotal : 0;
+    const custoRateadoUnit = p.qtd>0 ? (custoFinal*proporcao)/p.qtd : 0;
+    const vendaUnit = custoRateadoUnit * (1 + lucro/100);
+    const vendaTotal = vendaUnit * p.qtd;
+    dados.push([p.produto, p.qtd, p.total.toFixed(2), custoRateadoUnit.toFixed(2), vendaUnit.toFixed(2), vendaTotal.toFixed(2)]);
+  });
+
+  dados.push([]);
+  dados.push(["Subtotal","","", "", "", calc.subtotal.toFixed(2)]);
+  dados.push(["Desconto","","", "", "", calc.desconto.toFixed(2)]);
+  dados.push(["Frete","","", "", "", calc.frete.toFixed(2)]);
+  dados.push(["Impostos","","", "", "", calc.impostos.toFixed(2)]);
+  dados.push(["Custo Final","","", "", "", calc.custoFinal.toFixed(2)]);
+  dados.push(["Potencial de Venda","","", "", "", calc.potencialTotalVenda.toFixed(2)]);
+
+  const ws = XLSX.utils.aoa_to_sheet(dados);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Nota Atual");
+  XLSX.writeFile(wb, "nota_precificacao.xlsx");
+}
+
+/* Persistência em localStorage */
+function carregarNotas(){
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch(e){ return []; }
+}
+function salvarNotas(arr){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+}
+
+function salvarNota(){
+  const loja = ($$('#loja').value || '').trim();
+  const data = $$('#dataNota').value || hojeISO();
+  const obs = $$('#obs').value || "";
+  const calc = calcular();
+  if(!loja){ alert("Informe a loja."); return; }
+  if(calc.produtos.length===0){ alert("Adicione ao menos 1 produto."); return; }
+
+  const nota = {
+    id: Date.now(),
+    loja, data, obs,
+    subtotal: calc.subtotal,
+    desconto: calc.desconto,
+    frete: calc.frete,
+    impostos: calc.impostos,
+    lucro: calc.lucro,
+    custoFinal: calc.custoFinal,
+    potencialTotalVenda: calc.potencialTotalVenda,
+    produtos: calc.produtos
+  };
+  const notas = carregarNotas();
+  notas.push(nota);
+  salvarNotas(notas);
+  atualizarListaNotas();
+  alert("Nota salva com sucesso!");
+}
+
+/* Renderização de Notas Salvas */
+function atualizarListaNotas(){
+  const notas = carregarNotas().sort((a,b)=> new Date(b.data) - new Date(a.data));
+  if(notas.length===0){ $$('#notasContainer').innerHTML = "<p class='muted'>Nenhuma nota salva ainda.</p>"; return; }
+
+  // Agrupa por loja
+  const porLoja = {};
+  notas.forEach(n=>{
+    porLoja[n.loja] = porLoja[n.loja] || [];
+    porLoja[n.loja].push(n);
+  });
+
+  let html = "";
+  Object.keys(porLoja).sort().forEach(loja=>{
+    html += `<div style="margin:8px 0">
+      <span class="pill">${loja}</span>
+    </div>`;
+    porLoja[loja].forEach(n=>{
+      html += `<div class="card" style="padding:10px; margin:8px 0">
+        <div><b>${new Date(n.data).toLocaleDateString()}</b> — <span class="muted">${n.obs || 'Sem observações'}</span></div>
+        <div class="muted">Itens: ${n.produtos.length} | Subtotal: ${BRL(n.subtotal)} | Custo Final: ${BRL(n.custoFinal)} | Potencial Venda: ${BRL(n.potencialTotalVenda)}</div>
+        <details style="margin-top:6px">
+          <summary>Ver produtos</summary>
+          <table style="margin-top:6px">
+            <thead><tr><th>Produto</th><th>Qtd</th><th>Total Nota</th></tr></thead>
+            <tbody>
+              ${n.produtos.map(p=>`<tr><td style="text-align:left">${p.produto}</td><td>${p.qtd}</td><td>${BRL(p.total)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </details>
+        <div class="toolbar" style="margin-top:8px">
+          <button class="btn secondary" onclick='recarregarNota(${JSON.stringify(n.id)})'>Carregar na calculadora</button>
+          <button class="btn danger" onclick='excluirNota(${JSON.stringify(n.id)})'>Excluir</button>
+        </div>
+      </div>`;
+    });
+  });
+
+  $$('#notasContainer').innerHTML = html;
+}
+
+function excluirNota(id){
+  if(!confirm("Excluir esta nota?")) return;
+  const notas = carregarNotas().filter(n=> n.id !== id);
+  salvarNotas(notas);
+  atualizarListaNotas();
+}
+
+function recarregarNota(id){
+  const n = carregarNotas().find(x=>x.id===id);
+  if(!n){ alert("Nota não encontrada."); return; }
+  $$('#loja').value = n.loja;
+  $$('#dataNota').value = n.data;
+  $$('#obs').value = n.obs || "";
+  $$('#desconto').value = n.desconto;
+  $$('#frete').value = n.frete;
+  $$('#impostos').value = n.impostos;
+  $$('#lucro').value = n.lucro;
+
+  const tbody = document.querySelector("#tabela-produtos tbody");
+  tbody.innerHTML = "";
+  n.produtos.forEach(p=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" value="${p.produto.replace(/"/g,'&quot;')}"></td>
+      <td><input type="number" value="${p.qtd}" min="1" class="qtd"></td>
+      <td><input type="number" value="${p.unitario}" step="0.01" class="unitario"></td>
+      <td class="subtotal">0,00</td>
+      <td><button class="btn secondary" onclick="removerLinha(this)">🗑</button></td>`;
+    tbody.appendChild(tr);
+  });
+  calcular();
+}
+
+/* Resumo por Período */
+function habilitarPersonalizado(enable){
+  $$('#deData').disabled = !enable;
+  $$('#ateData').disabled = !enable;
+}
+function rangePeriodo(){
+  const tipo = $$('#periodoSelect').value;
+  const now = new Date();
+  let de, ate;
+
+  if(tipo==='hoje'){
+    de = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    ate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59);
+  } else if(tipo==='semana'){
+    const dia = now.getDay(); // 0 dom ... 6 sab
+    const dist = (dia+6)%7; // seg=0
+    de = new Date(now); de.setDate(now.getDate()-dist); de.setHours(0,0,0,0);
+    ate = new Date(de); ate.setDate(de.getDate()+6); ate.setHours(23,59,59,999);
+  } else if(tipo==='mes'){
+    de = new Date(now.getFullYear(), now.getMonth(), 1);
+    ate = new Date(now.getFullYear(), now.getMonth()+1, 0, 23,59,59);
+  } else { // personalizado
+    const d1 = $$('#deData').value ? new Date($$('#deData').value) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const d2 = $$('#ateData').value ? new Date($$('#ateData').value) : new Date(now.getFullYear(), now.getMonth()+1, 0);
+    de = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate(), 0,0,0);
+    ate = new Date(d2.getFullYear(), d2.getMonth(), d2.getDate(), 23,59,59);
+  }
+  return {de, ate};
+}
+
+function renderResumoPeriodo(){
+  const tipo = $$('#periodoSelect').value;
+  habilitarPersonalizado(tipo==='personalizado');
+  const {de, ate} = rangePeriodo();
+  const notas = carregarNotas().filter(n=>{
+    const d = new Date(n.data);
+    return d >= de && d <= ate;
+  });
+
+  const totals = notas.reduce((acc,n)=>{
+    acc.subtotal += Number(n.subtotal||0);
+    acc.custoFinal += Number(n.custoFinal||0);
+    acc.venda += Number(n.potencialTotalVenda||0);
+    acc.qtdNotas += 1;
+    return acc;
+  }, {subtotal:0, custoFinal:0, venda:0, qtdNotas:0});
+
+  const margemBruta = totals.venda>0 ? ((totals.venda - totals.custoFinal)/totals.venda)*100 : 0;
+
+  let html = `<p><b>Período:</b> ${de.toLocaleDateString()} — ${ate.toLocaleDateString()}</p>
+  <p>🧾 <b>Notas no período:</b> ${totals.qtdNotas}</p>
+  <p>🧮 <b>Subtotal somado:</b> ${BRL(totals.subtotal)}</p>
+  <p>💰 <b>Custo Final somado:</b> ${BRL(totals.custoFinal)}</p>
+  <p>📈 <b>Potencial de Venda (somado):</b> ${BRL(totals.venda)}</p>
+  <p>📊 <b>Margem Bruta potencial:</b> ${margemBruta.toFixed(2)}%</p>`;
+
+  if(notas.length){
+    html += `<details style="margin-top:8px"><summary>Ver notas</summary>`;
+    html += notas.map(n=>`<div style="margin:6px 0">
+      <span class="pill">${new Date(n.data).toLocaleDateString()}</span>
+      <span class="pill">${n.loja}</span>
+      <span class="muted">${n.obs||''}</span>
+      <span class="pill">Custo: ${BRL(n.custoFinal)}</span>
+      <span class="pill">Venda: ${BRL(n.potencialTotalVenda)}</span>
+    </div>`).join('');
+    html += `</details>`;
+  }
+
+  $$('#resumoPeriodo').innerHTML = html;
+}
+
+/* Exportar Excel – Resumo */
+function exportarExcelResumo(){
+  const notas = carregarNotas().sort((a,b)=> new Date(a.data)-new Date(b.data));
+  if(!notas.length){ alert("Sem notas salvas."); return; }
+  const dados = [["Data","Loja","Obs","Subtotal (R$)","Custo Final (R$)","Potencial Venda (R$)","Margem (%)","Itens"]];
+
+  notas.forEach(n=>{
+    const margem = n.potencialTotalVenda>0 ? ((n.potencialTotalVenda - n.custoFinal)/n.potencialTotalVenda)*100 : 0;
+    dados.push([n.data, n.loja, n.obs || "", n.subtotal.toFixed(2), n.custoFinal.toFixed(2), n.potencialTotalVenda.toFixed(2), margem.toFixed(2), n.produtos.length]);
+  });
+
+  // Totais
+  const totals = notas.reduce((acc,n)=>{
+    acc.subtotal += n.subtotal;
+    acc.custoFinal += n.custoFinal;
+    acc.venda += n.potencialTotalVenda;
+    return acc;
+  }, {subtotal:0,custoFinal:0,venda:0});
+  const margemBruta = totals.venda>0 ? ((totals.venda - totals.custoFinal)/totals.venda)*100 : 0;
+
+  dados.push([]);
+  dados.push(["TOTAL","","", totals.subtotal.toFixed(2), totals.custoFinal.toFixed(2), totals.venda.toFixed(2), margemBruta.toFixed(2), ""]);
+
+  const ws = XLSX.utils.aoa_to_sheet(dados);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Resumo Notas");
+  XLSX.writeFile(wb, "resumo_precificacao.xlsx");
+}
+
+/* Backup JSON – Exportar/Importar */
+function exportarBackup(){
+  const notas = carregarNotas();
+  if(!notas.length){ alert("Nenhuma nota para exportar."); return; }
+  const blob = new Blob([JSON.stringify(notas,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "notas_backup.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function importarBackup(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    try{
+      const data = JSON.parse(ev.target.result);
+      if(!Array.isArray(data)){ alert("Arquivo inválido"); return; }
+      const substituir = confirm("Deseja SUBSTITUIR os dados existentes? Cancelar = Mesclar");
+      let notasExistentes = carregarNotas();
+      if(substituir) notasExistentes = data;
+      else notasExistentes = notasExistentes.concat(data);
+      salvarNotas(notasExistentes);
+      alert("Backup importado com sucesso!");
+      atualizarListaNotas();
+      renderResumoPeriodo();
+    }catch(err){ alert("Erro ao ler arquivo: "+err) }
+  };
+  reader.readAsText(file);
+}
+
+/* Apagar tudo */
+function apagarTudo(){
+  if(!confirm("Tem certeza que deseja apagar todas as notas salvas?")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  atualizarListaNotas();
+  renderResumoPeriodo();
+}
+</script>
+</body>
+</html>
